@@ -12,6 +12,15 @@ class Account {
     String pinHash; // Securely stored SHA-256 hash of the PIN
     String ifsc;
 
+    // Loan attributes
+    String loanType = "None"; // None, House, Education, Foreign/Visa
+    double loanAmount = 0.0;
+    double loanInterestRate = 0.0;
+    String loanStatus = "NONE"; // NONE, PENDING, APPROVED, REJECTED
+
+    // Gold Storage
+    double goldStored = 0.0; // in grams
+
     // Static list to store all generated IFSC codes to ensure uniqueness
     static java.util.List<String> ifscList = new java.util.ArrayList<>();
 
@@ -84,10 +93,44 @@ class Account {
     }
 }
 
+class Manager {
+    String username;
+    String pinHash;
+
+    public Manager(String username, String pinHash) {
+        this.username = username;
+        this.pinHash = pinHash;
+    }
+}
+
 public class Main {
     static Account[] accounts = new Account[100];
     static int accountCount = 0;
     static int nextAccountNumber = 1001;
+
+    // Banker Managers array
+    static Manager[] managers = new Manager[100];
+    static int managerCount = 0;
+
+    // Manager/Admin Global Settings
+    static double globalInterestRate = 10.0; // Default 10%
+
+    // Vault and Cash Balance Calculators
+    public static double getTotalGoldStored() {
+        double total = 0;
+        for (int i = 0; i < accountCount; i++) {
+            total += accounts[i].goldStored;
+        }
+        return total;
+    }
+
+    public static double getTotalCashBalance() {
+        double total = 0;
+        for (int i = 0; i < accountCount; i++) {
+            total += accounts[i].balance;
+        }
+        return total;
+    }
 
     // Helper method to hash PIN strings using SHA-256
     public static String hashPin(String pin) {
@@ -108,7 +151,148 @@ public class Main {
         }
     }
 
+    public static void managerSpace(Scanner scanner) {
+        System.out.print("\nEnter Manager Username: ");
+        String username = scanner.nextLine().trim();
+        System.out.print("Enter Manager PIN: ");
+        String pin = scanner.nextLine();
+
+        Manager loggedInManager = null;
+        String hashedInput = hashPin(pin);
+        for (int i = 0; i < managerCount; i++) {
+            if (managers[i].username.equalsIgnoreCase(username) && managers[i].pinHash.equals(hashedInput)) {
+                loggedInManager = managers[i];
+                break;
+            }
+        }
+
+        if (loggedInManager == null) {
+            System.out.println("[ERROR] Invalid Manager Credentials!");
+            return;
+        }
+
+        System.out.println("\n[SUCCESS] Manager Login successful! Welcome, " + loggedInManager.username);
+        boolean managerLoop = true;
+        while (managerLoop) {
+            System.out.println("\n==================================================");
+            System.out.println("            BANK MANAGER DASHBOARD                ");
+            System.out.println("==================================================");
+            System.out.println(" 1. View All Client Details");
+            System.out.println(" 2. Manage Loan Applications");
+            System.out.println(" 3. Change Interest Rate (Current: " + globalInterestRate + "%)");
+            System.out.println(" 4. Manage Money & Gold Vault");
+            System.out.println(" 5. View System-wide Transaction Logs");
+            System.out.println(" 6. Logout");
+            System.out.println("==================================================");
+            System.out.print("Please enter choice (1-6): ");
+
+            int choice = scanner.nextInt();
+            scanner.nextLine(); // Consume newline
+
+            if (choice == 1) {
+                // View All Client Details
+                System.out.println("\n--- CLIENT DETAILS LIST ---");
+                if (accountCount == 0) {
+                    System.out.println("No accounts registered in the system.");
+                } else {
+                    for (int i = 0; i < accountCount; i++) {
+                        Account acc = accounts[i];
+                        System.out.println("--------------------------------------------------");
+                        System.out.println("Name: " + acc.name + " | Acc No: " + acc.accountNumber);
+                        System.out.println("Mobile: " + acc.mobile + " | Email: " + acc.email + " | Place: " + acc.place);
+                        System.out.println("Balance: INR " + acc.balance + " | Gold Stored: " + acc.goldStored + "g");
+                        System.out.println("IFSC: " + acc.ifsc);
+                        System.out.println("Loan Status: " + acc.loanStatus + " | Loan Type: " + acc.loanType + " | Amount: INR " + acc.loanAmount);
+                    }
+                    System.out.println("--------------------------------------------------");
+                }
+            } else if (choice == 2) {
+                // Manage Loan Applications
+                System.out.println("\n--- PENDING LOAN APPLICATIONS ---");
+                java.util.List<Account> pendingLoans = new java.util.ArrayList<>();
+                for (int i = 0; i < accountCount; i++) {
+                    if ("PENDING".equals(accounts[i].loanStatus)) {
+                        pendingLoans.add(accounts[i]);
+                    }
+                }
+
+                if (pendingLoans.isEmpty()) {
+                    System.out.println("No pending loan applications.");
+                } else {
+                    for (int i = 0; i < pendingLoans.size(); i++) {
+                        Account acc = pendingLoans.get(i);
+                        System.out.println((i + 1) + ". Name: " + acc.name + " (Acc: " + acc.accountNumber + ") | " + acc.loanType + " Loan | Amount: INR " + acc.loanAmount + " | Interest Rate: " + acc.loanInterestRate + "%");
+                    }
+                    System.out.print("Select loan to manage (1-" + pendingLoans.size() + ") or 0 to go back: ");
+                    int select = scanner.nextInt();
+                    scanner.nextLine();
+                    if (select > 0 && select <= pendingLoans.size()) {
+                        Account targetAcc = pendingLoans.get(select - 1);
+                        System.out.print("Approve or Reject? (1. Approve, 2. Reject): ");
+                        int decision = scanner.nextInt();
+                        scanner.nextLine();
+                        if (decision == 1) {
+                            targetAcc.loanStatus = "APPROVED";
+                            // Add loan amount directly to user's balance
+                            targetAcc.balance += targetAcc.loanAmount;
+                            targetAcc.addTransaction("LOAN APPROVED: INR " + targetAcc.loanAmount + " (" + targetAcc.loanType + " Loan at " + targetAcc.loanInterestRate + "% interest)");
+                            System.out.println("[SUCCESS] Loan application approved. Funds deposited into account.");
+                        } else if (decision == 2) {
+                            targetAcc.loanStatus = "REJECTED";
+                            targetAcc.addTransaction("LOAN REJECTED: " + targetAcc.loanType + " Loan request of INR " + targetAcc.loanAmount);
+                            System.out.println("[SUCCESS] Loan application rejected.");
+                        } else {
+                            System.out.println("[ERROR] Invalid choice.");
+                        }
+                    }
+                }
+            } else if (choice == 3) {
+                // Change Interest Rate
+                System.out.print("\nEnter new global interest rate (in %): ");
+                double rate = scanner.nextDouble();
+                scanner.nextLine();
+                if (rate >= 0) {
+                    globalInterestRate = rate;
+                    System.out.println("[SUCCESS] Global interest rate set to " + globalInterestRate + "%.");
+                } else {
+                    System.out.println("[ERROR] Interest rate cannot be negative.");
+                }
+            } else if (choice == 4) {
+                // Manage Money & Gold Vault
+                System.out.println("\n--- BANK MONEY & GOLD VAULT SUMMARY ---");
+                System.out.println("Total Bank Cash Deposits  : INR " + getTotalCashBalance());
+                System.out.println("Total Gold Storage Volume : " + getTotalGoldStored() + " grams");
+                System.out.println("Total Registered Clients  : " + accountCount);
+            } else if (choice == 5) {
+                // View System-wide Transaction Logs
+                System.out.println("\n--- SYSTEM-WIDE AUDIT TRANSACTION LOGS ---");
+                boolean foundLogs = false;
+                for (int i = 0; i < accountCount; i++) {
+                    Account acc = accounts[i];
+                    if (acc.transactionCount > 0) {
+                        System.out.println("\nAccount Number: " + acc.accountNumber + " (" + acc.name + ")");
+                        for (int j = 0; j < acc.transactionCount; j++) {
+                            System.out.println("  - " + acc.transactions[j]);
+                        }
+                        foundLogs = true;
+                    }
+                }
+                if (!foundLogs) {
+                    System.out.println("No transactions recorded across any accounts.");
+                }
+            } else if (choice == 6) {
+                managerLoop = false;
+                System.out.println("Logged out from Manager Space.");
+            } else {
+                System.out.println("[ERROR] Invalid choice!");
+            }
+        }
+    }
+
     public static void main(String[] args) {
+        // Seed initial Bank Manager account
+        managers[managerCount++] = new Manager("admin", hashPin("9999"));
+
         // Seed two initial accounts with secure hashed PINs ("1234" -> hash and "5678"
         // -> hash)
         accounts[accountCount++] = new Account("1001", "Amit Sharma", "9876543210", "amit@example.com", "Mumbai",
@@ -124,9 +308,11 @@ public class Main {
             System.out.println(" 1. Account Signup");
             System.out.println(" 2. Account Login");
             System.out.println(" 3. Search Account");
-            System.out.println(" 4. Exit");
+            System.out.println(" 4. Bank Manager Login");
+            System.out.println(" 5. Bank Manager Signup");
+            System.out.println(" 6. Exit");
             System.out.println("==================================================");
-            System.out.print("Please enter your choice (1-4): ");
+            System.out.print("Please enter your choice (1-6): ");
 
             int choice = scanner.nextInt();
             scanner.nextLine(); // Consume newline
@@ -209,9 +395,11 @@ public class Main {
                     System.out.println(" 4. View Profile & Balance");
                     System.out.println(" 5. Update Profile Details");
                     System.out.println(" 6. View Transaction History");
-                    System.out.println(" 7. Logout");
+                    System.out.println(" 7. Apply / View Loans");
+                    System.out.println(" 8. Gold Storage Vault");
+                    System.out.println(" 9. Logout");
                     System.out.println("==================================================");
-                    System.out.print("Please enter choice (1-7): ");
+                    System.out.print("Please enter choice (1-9): ");
 
                     int userChoice = scanner.nextInt();
                     scanner.nextLine(); // Consume newline
@@ -308,6 +496,15 @@ public class Main {
                         System.out.println(" Account Number : " + loggedIn.accountNumber);
                         System.out.println(" Balance        : INR " + loggedIn.balance);
                         System.out.println(" IFSC Code      : " + loggedIn.ifsc);
+                        System.out.println(" Gold Stored    : " + loggedIn.goldStored + " grams");
+                        if (!loggedIn.loanType.equalsIgnoreCase("None")) {
+                            System.out.println(" Loan Type      : " + loggedIn.loanType);
+                            System.out.println(" Loan Amount    : INR " + loggedIn.loanAmount);
+                            System.out.println(" Interest Rate  : " + loggedIn.loanInterestRate + "%");
+                            System.out.println(" Loan Status    : " + loggedIn.loanStatus);
+                        } else {
+                            System.out.println(" Active Loan    : None");
+                        }
                         System.out.println("==================================================");
                     } else if (userChoice == 5) {
                         // UPDATE PROFILE DETAILS
@@ -380,6 +577,90 @@ public class Main {
                         }
                         System.out.println("==================================================");
                     } else if (userChoice == 7) {
+                        // LOAN SERVICE
+                        System.out.println("\n--- LOAN SERVICES ---");
+                        if ("NONE".equals(loggedIn.loanStatus) || "REJECTED".equals(loggedIn.loanStatus)) {
+                            if ("REJECTED".equals(loggedIn.loanStatus)) {
+                                System.out.println("[NOTE] Your previous loan request was REJECTED. You may re-apply.");
+                            }
+                            System.out.println("Available Loan Types:");
+                            System.out.println("1. House Loan (Interest Rate: " + globalInterestRate + "%)");
+                            System.out.println("2. Education Loan (Interest Rate: " + globalInterestRate + "%)");
+                            System.out.println("3. Foreign / Visa Loan (Interest Rate: " + globalInterestRate + "%)");
+                            System.out.print("Select loan type (1-3) or 0 to cancel: ");
+                            int loanOpt = scanner.nextInt();
+                            scanner.nextLine();
+                            if (loanOpt >= 1 && loanOpt <= 3) {
+                                String type = "";
+                                if (loanOpt == 1) type = "House";
+                                else if (loanOpt == 2) type = "Education";
+                                else if (loanOpt == 3) type = "Foreign/Visa";
+
+                                System.out.print("Enter required loan amount (INR): ");
+                                double amount = scanner.nextDouble();
+                                scanner.nextLine();
+                                if (amount > 0) {
+                                    loggedIn.loanType = type;
+                                    loggedIn.loanAmount = amount;
+                                    loggedIn.loanInterestRate = globalInterestRate;
+                                    loggedIn.loanStatus = "PENDING";
+                                    loggedIn.addTransaction("LOAN APPLIED: Requested " + type + " Loan of INR " + amount + " at " + globalInterestRate + "% interest");
+                                    System.out.println("[SUCCESS] Loan application submitted successfully! Pending Bank Manager's approval.");
+                                } else {
+                                    System.out.println("[ERROR] Invalid loan amount.");
+                                }
+                            }
+                        } else if ("PENDING".equals(loggedIn.loanStatus)) {
+                            System.out.println("You have a PENDING loan application:");
+                            System.out.println("Loan Type    : " + loggedIn.loanType);
+                            System.out.println("Requested Amt: INR " + loggedIn.loanAmount);
+                            System.out.println("Interest Rate: " + loggedIn.loanInterestRate + "%");
+                            System.out.println("Status       : PENDING (Awaiting manager approval)");
+                        } else if ("APPROVED".equals(loggedIn.loanStatus)) {
+                            System.out.println("You have an ACTIVE loan:");
+                            System.out.println("Loan Type    : " + loggedIn.loanType);
+                            System.out.println("Loan Amount  : INR " + loggedIn.loanAmount);
+                            System.out.println("Interest Rate: " + loggedIn.loanInterestRate + "%");
+                            System.out.println("Status       : APPROVED (Funds credited to account)");
+                        }
+                    } else if (userChoice == 8) {
+                        // GOLD STORAGE VAULT
+                        System.out.println("\n--- GOLD STORAGE VAULT ---");
+                        System.out.println("Your Stored Gold: " + loggedIn.goldStored + " grams");
+                        System.out.println("1. Deposit Gold");
+                        System.out.println("2. Withdraw Gold");
+                        System.out.println("3. Back to Dashboard");
+                        System.out.print("Select choice (1-3): ");
+                        int goldOpt = scanner.nextInt();
+                        scanner.nextLine();
+                        if (goldOpt == 1) {
+                            System.out.print("Enter gold weight to deposit (in grams): ");
+                            double weight = scanner.nextDouble();
+                            scanner.nextLine();
+                            if (weight > 0) {
+                                loggedIn.goldStored += weight;
+                                loggedIn.addTransaction("GOLD DEPOSITED: " + weight + " grams stored");
+                                System.out.println("[SUCCESS] " + weight + " grams of gold deposited in your vault storage.");
+                            } else {
+                                System.out.println("[ERROR] Invalid weight.");
+                            }
+                        } else if (goldOpt == 2) {
+                            System.out.print("Enter gold weight to withdraw (in grams): ");
+                            double weight = scanner.nextDouble();
+                            scanner.nextLine();
+                            if (weight > 0) {
+                                if (loggedIn.goldStored >= weight) {
+                                    loggedIn.goldStored -= weight;
+                                    loggedIn.addTransaction("GOLD WITHDRAWN: " + weight + " grams retrieved");
+                                    System.out.println("[SUCCESS] " + weight + " grams of gold withdrawn from your vault storage.");
+                                } else {
+                                    System.out.println("[ERROR] Insufficient gold balance stored.");
+                                }
+                            } else {
+                                System.out.println("[ERROR] Invalid weight.");
+                            }
+                        }
+                    } else if (userChoice == 9) {
                         loggedInLoop = false;
                         System.out.println("Logged out successfully.");
                     } else {
@@ -414,15 +695,55 @@ public class Main {
                     System.out.println(" Account Number : " + found.accountNumber);
                     System.out.println(" Balance        : INR " + found.balance);
                     System.out.println(" IFSC Code      : " + found.ifsc);
+                    System.out.println(" Gold Stored    : " + found.goldStored + " grams");
+                    if (!found.loanType.equalsIgnoreCase("None")) {
+                        System.out.println(" Loan Type      : " + found.loanType);
+                        System.out.println(" Loan Amount    : INR " + found.loanAmount);
+                        System.out.println(" Interest Rate  : " + found.loanInterestRate + "%");
+                        System.out.println(" Loan Status    : " + found.loanStatus);
+                    } else {
+                        System.out.println(" Active Loan    : None");
+                    }
                     System.out.println("==================================================");
                 } else {
                     System.out.println("[ERROR] Invalid Account Number or PIN. Access Denied.");
                 }
             } else if (choice == 4) {
+                managerSpace(scanner);
+            } else if (choice == 5) {
+                // MANAGER SIGNUP
+                System.out.println("\n--- BANK MANAGER SIGNUP ---");
+                System.out.print("Enter Username: ");
+                String username = scanner.nextLine().trim();
+                if (username.isEmpty()) {
+                    System.out.println("[ERROR] Username cannot be empty!");
+                    continue;
+                }
+                // Check if username already exists
+                boolean exists = false;
+                for (int i = 0; i < managerCount; i++) {
+                    if (managers[i].username.equalsIgnoreCase(username)) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (exists) {
+                    System.out.println("[ERROR] Username already exists!");
+                    continue;
+                }
+                System.out.print("Create a 4-Digit Security PIN: ");
+                String pin = scanner.nextLine();
+                if (pin.length() != 4) {
+                    System.out.println("[ERROR] Security PIN must be exactly 4 digits!");
+                    continue;
+                }
+                managers[managerCount++] = new Manager(username, hashPin(pin));
+                System.out.println("[SUCCESS] Bank Manager registered successfully!");
+            } else if (choice == 6) {
                 System.out.println("\nThank you for banking with Vision Bank of India. Goodbye!");
                 break;
             } else {
-                System.out.println("[ERROR] Invalid choice. Please select between 1 and 4.");
+                System.out.println("[ERROR] Invalid choice. Please select between 1 and 6.");
             }
         }
         scanner.close();
